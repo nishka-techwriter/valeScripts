@@ -1,0 +1,42 @@
+fmt := import("fmt")
+text := import("text")
+
+matches := []
+
+checkListDepth := func(scope) {
+    lines := text.split(scope, "\n")
+    maxDepth := 7
+    currentDepth := 0
+
+    for i, line in lines {
+        trimmedLine := text.trim_space(line)
+
+        if text.has_prefix(trimmedLine, "-") {
+            if currentDepth == 0 || !text.has_prefix(text.trim_space(lines[i-1]), "-") {
+                currentDepth = 1
+            } else {
+                currentDepth += 1
+            }
+
+            if currentDepth > maxDepth {
+                matches = append(matches, {
+                    begin: text.index(scope, line),
+                    end: text.index(scope, line) + len(line),
+                    message: fmt.sprintf("Ошибка: Глубина списка превышает %d уровней", maxDepth)
+                })
+            }
+        } else {
+            currentDepth = 0
+        }
+
+        if text.has_prefix(trimmedLine, "*") || text.has_prefix(trimmedLine, "+") {
+            matches = append(matches, {
+                begin: text.index(scope, line),
+                end: text.index(scope, line) + len(line),
+                message: "Ошибка: Для списков допускается использование только символа '-'"
+            })
+        }
+    }
+}
+
+checkListDepth(scope)

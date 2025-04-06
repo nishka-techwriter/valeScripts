@@ -1,0 +1,49 @@
+fmt := import("fmt")
+text := import("text")
+
+matches := [] 
+
+checkDuplicateIncludes := func(scope) {
+    lines := text.split(scope, "\n")
+    stack := [] 
+
+    for i, line in lines {
+        trimmed := text.trim_space(line)
+
+        if text.has_prefix(trimmed, "<IncludeWhen product=") {
+            product := ""
+            marker := `product="`
+            markerIndex := text.index(trimmed, marker)
+
+            if markerIndex != -1 {
+                afterMarker := text.substr(trimmed, markerIndex + len(marker), len(trimmed))
+                quoteIndex := text.index(afterMarker, `"`)
+                if quoteIndex != -1 {
+                    product = text.substr(afterMarker, 0, quoteIndex)
+                }
+            }
+
+            for j := 0; j < len(stack); j++ {
+                if stack[j] == product {
+                    lineStart := text.index(scope, line)
+                    matches = append(matches, {
+                        begin: lineStart,
+                        end: lineStart + len(line),
+                        message: fmt.sprintf("Вложенный <IncludeWhen> с product=\"%s\" дублирует родительский", product)
+                    })
+                    break
+                }
+            }
+
+            stack = append(stack, product)
+        }
+
+        if text.has_prefix(trimmed, "</IncludeWhen>") {
+            if len(stack) > 0 {
+                stack = stack[:len(stack)-1]
+            }
+        }
+    }
+}
+
+checkDuplicateIncludes(scope)

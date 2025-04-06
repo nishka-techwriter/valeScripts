@@ -1,0 +1,62 @@
+text := import("text") // https://github.com/d5/tengo/blob/master/docs/stdlib-text.md
+fmt := import("fmt") // https://github.com/d5/tengo/blob/master/docs/stdlib-fmt.md
+
+matches := [] 
+
+requiredFields := ["id", "title", "sidebar_label", "slug", "type"]
+
+checkMetaInfo := func(scope) {
+    yamlStart := text.index(scope, "---")
+    if yamlStart == -1 {
+        matches = append(matches, {begin: 0, end: 0, message: "Ошибка: Отсутствует метаинформация о файле"})
+        return
+    }
+
+    yamlEnd := text.index(scope[yamlStart+3:], "---")
+    if yamlEnd == -1 {
+        matches = append(matches, {begin: yamlStart, end: yamlStart + 3, message: "Ошибка: Блок метаинформации не закрыт"})
+        return
+    }
+
+    yamlContent := text.trim(scope[yamlStart+3 : yamlStart+3+yamlEnd], " \t\n\r")
+    lines := text.split(yamlContent, "\n")
+    
+    metaInfo := {}
+    for line in lines {
+        parts := text.split_n(line, ":", 2)
+        if len(parts) == 2 {
+            key := text.trim(parts[0], " \t\n\r")
+            value := text.trim(parts[1], " \t\n\r")
+            metaInfo[key] = value
+        }
+    }
+
+    missingFields := []
+    for field in requiredFields {
+        if metaInfo[field] == "" || metaInfo[field] == undefined {
+            missingFields = append(missingFields, field)
+        }
+    }
+
+    if metaInfo["id"] != "" {
+        idValue := metaInfo["id"]
+        idMatches := text.re_find("^doc\\d{5,6}$", idValue)
+        if idMatches == undefined || len(idMatches) == 0 {
+            matches = append(matches, {
+                begin: text.index(scope, "id:"), 
+                end: text.index(scope, "id:") + len("id:") + len(metaInfo["id"]),
+                message: "Ошибка: id должен иметь формат 'doc00000' или 'doc000000', где 000000 - номер документа"
+            })
+        }
+    }
+
+    if len(missingFields) > 0 {
+        matches = append(matches, {
+            begin: yamlStart, 
+            end: yamlStart + yamlEnd + 3,
+            message: "Ошибка: Отсутствуют обязательные поля: " + text.join(missingFields, ", ")
+        })
+    }
+}
+
+checkMetaInfo(scope)
