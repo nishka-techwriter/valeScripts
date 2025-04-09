@@ -1,9 +1,14 @@
 text := import("text") // https://github.com/d5/tengo/blob/master/docs/stdlib-text.md
 fmt := import("fmt") // https://github.com/d5/tengo/blob/master/docs/stdlib-fmt.md
 
-matches := [] 
+matches := []
 
 requiredFields := ["id", "title", "sidebar_label", "slug", "type"]
+
+safeHas := func(dict, key) {
+    val := dict[key]
+    return val != undefined && val != ""
+}
 
 checkMetaInfo := func(scope) {
     yamlStart := text.index(scope, "---")
@@ -20,8 +25,8 @@ checkMetaInfo := func(scope) {
 
     yamlContent := text.trim(scope[yamlStart+3 : yamlStart+3+yamlEnd], " \t\n\r")
     lines := text.split(yamlContent, "\n")
-    
     metaInfo := {}
+
     for line in lines {
         parts := text.split_n(line, ":", 2)
         if len(parts) == 2 {
@@ -33,30 +38,48 @@ checkMetaInfo := func(scope) {
 
     missingFields := []
     for field in requiredFields {
-        if metaInfo[field] == "" || metaInfo[field] == undefined {
+        if !safeHas(metaInfo, field) {
             missingFields = append(missingFields, field)
         }
     }
 
-    if metaInfo["id"] != "" {
+    if safeHas(metaInfo, "id") {
         idValue := metaInfo["id"]
         idMatches := text.re_find("^doc\\d{5,6}$", idValue)
         if idMatches == undefined || len(idMatches) == 0 {
-            matches = append(matches, {
-                begin: text.index(scope, "id:"), 
-                end: text.index(scope, "id:") + len("id:") + len(metaInfo["id"]),
-                message: "Ошибка: id должен иметь формат 'doc00000' или 'doc000000', где 000000 - номер документа"
-            })
+            idIndex := text.index(scope, "id:")
+            idEnd := idIndex + len("id:") + len(idValue)
+            if idIndex != -1 {
+                matches = append(matches, {
+                    begin: idIndex,
+                    end: idEnd,
+                    message: "Ошибка: id должен иметь формат 'doc00000' или 'doc000000', где 000000 - номер документа"
+                })
+            }
+        }
+    }
+
+    if safeHas(metaInfo, "slug") {
+        slug := metaInfo["slug"]
+        slugMatches := text.re_find("^[a-z0-9]+(-[a-z0-9]+)*$", slug)
+        if slugMatches == undefined || len(slugMatches) == 0 {
+            slugIndex := text.index(scope, "slug:")
+            slugEnd := slugIndex + len("slug:") + len(slug)
+            if slugIndex != -1 {
+                matches = append(matches, {
+                    begin: slugIndex,
+                    end: slugEnd,
+                    message: "Ошибка: slug должен быть в формате kebab-case (строчные латинские буквы, цифры, дефисы)"
+                })
+            }
         }
     }
 
     if len(missingFields) > 0 {
         matches = append(matches, {
-            begin: yamlStart, 
+            begin: yamlStart,
             end: yamlStart + yamlEnd + 3,
             message: "Ошибка: Отсутствуют обязательные поля: " + text.join(missingFields, ", ")
         })
     }
 }
-
-checkMetaInfo(scope)
